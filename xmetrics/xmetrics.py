@@ -29,9 +29,6 @@ class XMetrics(object):
             Mean dryspell length
         '''
 
-        if self._obj.ndim != 3:
-            raise ValueError('Invalid shape for wetdry metric')
-
         ntimes = len(self._obj['time'])
 
         wetdays = xr.zeros_like(self._obj)
