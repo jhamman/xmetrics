@@ -105,7 +105,7 @@ class XMetrics(object):
 
         return xr.DataArray(hist, dims='bins', coords={'bins': bin_centers})
 
-    def fit_dist(self, distribution, nonexcedance_probs,
+    def fit_dist(self, distribution, nonexceedance_probs,
                  dim=None, axis=None, fit_args=None):
         '''Fit scipy.stats distribution and return values at specified
            non-exceedance probabilities
@@ -115,7 +115,7 @@ class XMetrics(object):
         distribution : str or scipy.stats.rv_continuous
             A continuous random variable distribution to fit to this object's
             data
-        nonexcedance_probs : array_like
+        nonexceedance_probs : array_like
             probability of non-exceedance
         dim : str
             dimension name for which to fit the distribution over
@@ -133,7 +133,7 @@ class XMetrics(object):
 
         from .utils import _scipy_fit_and_ppf
 
-        nonexcedance_probs = np.atleast_1d(nonexcedance_probs)
+        nonexceedance_probs = np.atleast_1d(nonexceedance_probs)
 
         if not isinstance(distribution, scipy.stats.rv_continuous):
             distribution = getattr(scipy.stats, distribution)
@@ -146,9 +146,9 @@ class XMetrics(object):
             return ValueError('must provide either dim or axis')
 
         # fit distribution and extract values at points defined by
-        # `nonexcedance_probs`
+        # `nonexceedance_probs`
         out = np.apply_along_axis(_scipy_fit_and_ppf, axis, self._obj,
-                                  pone=nonexcedance_probs, fit_args=fit_args)
+                                  pone=nonexceedance_probs, fit_args=fit_args)
 
         # dims
         new_dims = list(self._obj.dims)
@@ -157,7 +157,7 @@ class XMetrics(object):
         # coords
         new_coords = dict(self._obj.coords)
         new_coords.pop(dim)
-        new_coords['prob_non_exceedance'] = nonexcedance_probs
+        new_coords['prob_non_exceedance'] = nonexceedance_probs
 
         return xr.DataArray(out, dims=new_dims, coords=new_coords)
 
