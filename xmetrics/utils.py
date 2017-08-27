@@ -12,64 +12,60 @@ def _scipy_fit_and_ppf(vals, dist=scipy.stats.gamma, pone=None, fit_args=None):
 
 @numba.jit(nopython=True, cache=True)
 def spatial_autocorrelation(data, minlag=1, maxlag=50, timelags=4):
-    '''Ethans spatial autocorrelation function, just reformatted a bit'''
-    shape = data
-    out_shape = (maxlag - minlag + 1 + timelags + 1, shape[1], shape[2])
+    '''Ethan's spatial autocorrelation function, just reformatted a bit'''
+    shape = data.shape
+    out_shape = (shape[0], shape[1], maxlag - minlag + 1 + timelags + 1)
     rs = np.full(out_shape, np.inf)
-    delta = (shape[1] - maxlag * 2) / 20.0
-    current = 0.0
-    for i in range(shape[1]):
-        if (i - maxlag) >= current:
-            current += delta
-        for j in range(shape[2]):
-            if data[0, i, j] < 1e10:
-                for lag in range(minlag, min(shape[1] - i - 1,
-                                             shape[2] - j - 1,
+    for i in range(shape[0]):
+        for j in range(shape[1]):
+            if data[i, j, 0] < 1e10:
+                for lag in range(minlag, min(shape[0] - i - 1,
+                                             shape[1] - j - 1,
                                              maxlag + 1)):
                     r = 0.0
                     n = 0.0
                     # check for non-fill locations
-                    if (data[0, i + lag, j] < np.inf):
-                        r2 = corr(data[:, i, j], data[:, i + lag, j])
+                    if (data[i + lag, j, 0] < np.inf):
+                        r2 = corr(data[i, j], data[i + lag, j])
                         r += r2
                         n += 1
                     if data[0, i, j + lag] < np.inf:
-                        r4 = corr(data[:, i, j], data[:, i, j + lag])
+                        r4 = corr(data[i, j], data[i, j + lag])
                         r += r4
                         n += 1
 
                     if n > 0:
-                        rs[lag - 1, i, j] = r / n
+                        rs[i, j, lag - 1] = r / n
 
                 for t in range(1, timelags):
-                    r = corr(data[t:, i, j], data[:-t, i, j])
-                    rs[maxlag + t, i, j] = r
+                    r = corr(data[i, j, t:], data[i, j, :-t])
+                    rs[i, j, maxlag + t] = r
     return rs
 
 
 @numba.jit(nopython=True, cache=True)
 def corr(data1, data2):
     '''https://stackoverflow.com/a/29194624/1757464'''
-    M = data1.size
+    n = data1.size
 
     sum1 = 0.
     sum2 = 0.
-    for i in range(M):
+    for i in range(n):
         sum1 += data1[i]
         sum2 += data2[i]
-    mean1 = sum1 / M
-    mean2 = sum2 / M
+    mean1 = sum1 / n
+    mean2 = sum2 / n
 
     var_sum1 = 0.
     var_sum2 = 0.
     cross_sum = 0.
-    for i in range(M):
+    for i in range(n):
         var_sum1 += (data1[i] - mean1) ** 2
         var_sum2 += (data2[i] - mean2) ** 2
         cross_sum += (data1[i] * data2[i])
 
-    std1 = (var_sum1 / M) ** .5
-    std2 = (var_sum2 / M) ** .5
-    cross_mean = cross_sum / M
+    std1 = (var_sum1 / n) ** .5
+    std2 = (var_sum2 / n) ** .5
+    cross_mean = cross_sum / n
 
     return (cross_mean - mean1 * mean2) / (std1 * std2)

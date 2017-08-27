@@ -38,8 +38,11 @@ class XMetrics(object):
         wet_fraction = total_wetdays / ntimes
 
         diff_wetdays = wetdays.diff('time', n=1)
+
         wetspells = (diff_wetdays == 1).sum(dim='time')
+        wetspells += wetdays.isel(time=0)
         dryspells = (diff_wetdays == -1).sum(dim='time')
+        dryspells += (wetdays.isel(time=0) == 0)
 
         # wetdays should be 0 so length will be 0/1
         wetspells = wetspells.where(wetspells == 0, 1)
@@ -171,12 +174,14 @@ class XMetrics(object):
         '''
         from .utils import spatial_autocorrelation
 
-        assert self._obj.get_axis_num('time') == 0
+        xy_dims = list(self._obj.dims).remove('time')
+        trans_dims = xy_dims + ['time']
+        new_dims = ['lag'] + xy_dims
 
-        data = self._obj.data
+        da = self._obj.transpose(*trans_dims)
 
-        r = spatial_autocorrelation(data, **kwargs)
+        r = spatial_autocorrelation(da.data, **kwargs)
 
-        r = xr.DatArray(r, dims=('lag', ))
+        r = xr.DatArray(r, dims=new_dims, name='spatial_autocorrelation')
 
         return r
