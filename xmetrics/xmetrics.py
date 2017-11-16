@@ -31,25 +31,21 @@ class XMetrics(object):
 
         ntimes = len(self._obj['time'])
 
-        wetdays = xr.zeros_like(self._obj)
         wetdays = (self._obj > threshold)
         total_wetdays = wetdays.sum(dim='time')
 
         wet_fraction = total_wetdays / ntimes
 
-        diff_wetdays = wetdays.diff('time', n=1)
+        # start of wetspells == 1, dryspells == -1, no change == 0
+        diff_wetdays = wetdays.astype(np.int).diff('time', n=1)
 
+        # pick out the begining of wet/dry spells
         wetspells = (diff_wetdays == 1).sum(dim='time')
         wetspells += wetdays.isel(time=0)
         dryspells = (diff_wetdays == -1).sum(dim='time')
         dryspells += (wetdays.isel(time=0) == 0)
 
-        # wetdays should be 0 so length will be 0/1
-        wetspells = wetspells.where(wetspells == 0, 1)
         wetspell_length = total_wetdays / wetspells
-
-        # drydays should be 0 so length will be 0/1
-        dryspells = dryspells.where(dryspells == 0, 1)
         dryspell_length = (ntimes - total_wetdays) / dryspells
 
         return wet_fraction, wetspell_length, dryspell_length
@@ -174,7 +170,8 @@ class XMetrics(object):
         '''
         from .utils import spatial_autocorrelation
 
-        xy_dims = list(self._obj.dims).remove('time')
+        xy_dims = list(self._obj.dims)
+        xy_dims.remove('time')
         trans_dims = xy_dims + ['time']
         new_dims = ['lag'] + xy_dims
 
