@@ -15,21 +15,21 @@ def spatial_autocorrelation(data, minlag=1, maxlag=50, timelags=4):
     '''Ethan's spatial autocorrelation function, just reformatted a bit'''
     shape = data.shape
     out_shape = (shape[0], shape[1], maxlag - minlag + 1 + timelags + 1)
-    rs = np.full(out_shape, np.inf)
+    rs = np.full(out_shape, np.nan)
     for i in range(shape[0]):
         for j in range(shape[1]):
-            if data[i, j, 0] < 1e10:
+            if not np.isnan(data[i, j, 0]):
                 for lag in range(minlag, min(shape[0] - i - 1,
                                              shape[1] - j - 1,
                                              maxlag + 1)):
                     r = 0.0
                     n = 0.0
                     # check for non-fill locations
-                    if (data[i + lag, j, 0] < np.inf):
+                    if not np.isnan(data[i + lag, j, 0]):
                         r2 = corr(data[i, j], data[i + lag, j])
                         r += r2
                         n += 1
-                    if data[0, i, j + lag] < np.inf:
+                    if not np.isnan(data[0, i, j + lag]):
                         r4 = corr(data[i, j], data[i, j + lag])
                         r += r4
                         n += 1

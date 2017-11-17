@@ -4,3 +4,7 @@ channels:
 dependencies:
   - python=2.7
   - xarray
+  - numba
+  - scipy
+  - dask
+  - pytest

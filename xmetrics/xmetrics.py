@@ -1,3 +1,10 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
+import functools
+from collections import OrderedDict
+
 import dask.array
 import xarray as xr
 import numpy as np
@@ -17,38 +24,18 @@ class XMetrics(object):
         Parameters
         ----------
         threshold : float
-            precip threshold to use as definition of a wet day
+            Precipitation threshold to use as definition of a wet day
 
         Returns
         -------
-        wet_fraction : DataArray
-            Wet day fraction
-        wetspell_length : DataArray
-            Mean wetspell length
-        dryspell_length: DataArray
-            Mean dryspell length
+        metrics : Dataset
+            Dataset with three metric variables: `wet_fraction`,
+            `wetspell_length`, `dryspell_length`
         '''
 
-        ntimes = len(self._obj['time'])
+        from .metrics import wetdry
 
-        wetdays = (self._obj > threshold)
-        total_wetdays = wetdays.sum(dim='time')
-
-        wet_fraction = total_wetdays / ntimes
-
-        # start of wetspells == 1, dryspells == -1, no change == 0
-        diff_wetdays = wetdays.astype(np.int).diff('time', n=1)
-
-        # pick out the begining of wet/dry spells
-        wetspells = (diff_wetdays == 1).sum(dim='time')
-        wetspells += wetdays.isel(time=0)
-        dryspells = (diff_wetdays == -1).sum(dim='time')
-        dryspells += (wetdays.isel(time=0) == 0)
-
-        wetspell_length = total_wetdays / wetspells
-        dryspell_length = (ntimes - total_wetdays) / dryspells
-
-        return wet_fraction, wetspell_length, dryspell_length
+        return wetdry(self._obj, threshold=threshold)
 
     def histogram(self, precip=True, bins=50, hist_range=None, **kwargs):
         '''Calculate a histogram for data
@@ -105,7 +92,7 @@ class XMetrics(object):
         return xr.DataArray(hist, dims='bins', coords={'bins': bin_centers})
 
     def fit_dist(self, distribution, nonexceedance_probs,
-                 dim=None, axis=None, fit_args=None):
+                 dim=None, fit_args=None):
         '''Fit scipy.stats distribution and return values at specified
            non-exceedance probabilities
 
@@ -118,8 +105,6 @@ class XMetrics(object):
             probability of non-exceedance
         dim : str
             dimension name for which to fit the distribution over
-        axis : int
-            axis for which to fit the distribution over
         fit_args : dict
             Dictionary of arguments to pass to `distribution.fit`
 
@@ -131,34 +116,36 @@ class XMetrics(object):
        '''
 
         from .utils import _scipy_fit_and_ppf
+        if dim is None:
+            raise ValueError('dim is a required argument')
 
         nonexceedance_probs = np.atleast_1d(nonexceedance_probs)
+        if nonexceedance_probs.ndim > 1:
+            raise ValueError('Rank of nonexceedance_probs (%s) is too '
+                             'large' % nonexceedance_probs.ndim)
 
         if not isinstance(distribution, scipy.stats.rv_continuous):
             distribution = getattr(scipy.stats, distribution)
 
-        if axis is None:
-            axis = self._obj.get_axis_num(dim)
-        elif dim is None:
-            dim = self._obj.dims[axis]
-        else:
-            return ValueError('must provide either dim or axis')
+        dims = OrderedDict(zip(self._obj.dims, self._obj.shape))
+        del dims[dim]
+        dims['pone'] = len(nonexceedance_probs)
 
         # fit distribution and extract values at points defined by
         # `nonexceedance_probs`
-        out = np.apply_along_axis(_scipy_fit_and_ppf, axis, self._obj,
-                                  pone=nonexceedance_probs, fit_args=fit_args)
+        func = functools.partial(_scipy_fit_and_ppf, dist=distribution,
+                                 pone=nonexceedance_probs, fit_args=fit_args)
+        out = xr.apply_ufunc(func, self._obj,
+                             vectorize=True,
+                             input_core_dims=[[dim]],
+                             output_core_dims=[['pone']],
+                             output_dtypes=[np.float],
+                             output_sizes=dims,
+                             dask='parallelized')
 
-        # dims
-        new_dims = list(self._obj.dims)
-        new_dims[axis] = 'prob_non_exceedance'
+        out.coords['pone'] = xr.Variable('pone', nonexceedance_probs)
 
-        # coords
-        new_coords = dict(self._obj.coords)
-        new_coords.pop(dim)
-        new_coords['prob_non_exceedance'] = nonexceedance_probs
-
-        return xr.DataArray(out, dims=new_dims, coords=new_coords)
+        return out
 
     def spatial_autocorrelations(self, **kwargs):
         '''Calculate the spatial autocorrelation
@@ -179,6 +166,6 @@ class XMetrics(object):
 
         r = spatial_autocorrelation(da.data, **kwargs)
 
-        r = xr.DatArray(r, dims=new_dims, name='spatial_autocorrelation')
+        r = xr.DataArray(r, dims=new_dims, name='spatial_autocorrelation')
 
         return r

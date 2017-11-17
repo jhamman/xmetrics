@@ -1,8 +1,17 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 import pytest
 import numpy as np
 import xarray as xr
 
+from xarray.testing import assert_equal
+
 import xmetrics
+
+from . import raises_regex
+
 
 np.random.seed(3)
 
@@ -25,17 +34,30 @@ def da_time_lat_lon():
 
 
 def test_wetdry_metric(da_time_lat_lon):
-    da_time_lat_lon.xmetrics.wetdry(threshold=0.1)
+    ds = da_time_lat_lon.xmetrics.wetdry(threshold=0.1)
+    assert isinstance(ds, xr.Dataset)
+    assert 'wet_fraction' in ds
+    assert 'wetspell_length' in ds
+    assert 'dryspell_length' in ds
 
 
 def test_fit_dist_metric(da_time_lat_lon):
-    da_time_lat_lon.xmetrics.fit_dist('gamma', [0.01, 0.999], dim='time')
-    da_time_lat_lon.xmetrics.fit_dist('gamma', 0.5, dim='time')
+    actual1 = da_time_lat_lon.xmetrics.fit_dist('gamma', [0.01, 0.5, 0.999],
+                                                dim='time')
+    actual2 = da_time_lat_lon.xmetrics.fit_dist('gamma', 0.5, dim='time')
+
+    assert_equal(actual1.sel(pone=0.5), actual2.sel(pone=0.5))
+
+    with raises_regex(ValueError, 'dim is a required argument'):
+        da_time_lat_lon.xmetrics.fit_dist('gamma', 0.5)
 
 
 def test_histogram_metric(da_time_lat_lon):
-    da_time_lat_lon.xmetrics.histogram()
+    actual = da_time_lat_lon.xmetrics.histogram()
+    assert isinstance(actual, xr.DataArray)
 
 
-def spatial_autocorrelations(da_time_lat_lon):
-    da_time_lat_lon.xmetrics.spatial_autocorrelations()
+def test_spatial_autocorrelations(da_time_lat_lon):
+    actual = da_time_lat_lon.xmetrics.spatial_autocorrelations()
+    assert isinstance(actual, xr.DataArray)
+    assert 'lag' in actual.dims
